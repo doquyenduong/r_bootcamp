@@ -1,0 +1,928 @@
+---
+title: "Missing Migrant Project"
+author: "Quyen Duong, Nhu Casati Nguyen"
+semester: "In the beginning of the 2nd semester"
+date: "Last edited `r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: false 
+      smooth_scroll: false
+    toc_depth: 2
+    number_section: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, fig.align = "center")
+```
+```{r data, include=FALSE}
+# load packages and csv file
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(scales)
+library(gridExtra)
+library(tidyr)
+library(readr)
+library(knitr)
+library(lintr)
+library(janitor)
+library(Hmisc)
+library(patchwork)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+library(tm)
+library(ggridges)
+library(ggpol)
+library(conflicted)
+library(viridis)
+library(reshape2)
+library(hrbrthemes)
+library(ggmap)
+library(maps)
+library(mapdata)
+# library(RgoogleMaps)
+# library(sf)
+# library(mapview)
+
+
+# Set conflict preference
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+
+
+# load and read csv files
+df <- read_csv("dataset/MissingMigrants-Global-2021-09-05T18-37-06.csv")
+head(df)
+glimpse(df)
+str(df)
+```
+
+# Introduction
+
+The Missing Migrants Project tracks deaths of migrants and those who have gone missing along migratory routes across the globe. The research behind the project began following two shipwrecks off the coast of Lampedusa in October 2013, in which nearly 400 migrants lost their lives. Since then, the Missing Migrants Project has developed into an important hub of data and information, which is used widely by media, policy-makers, and researchers. The Missing Migrants Project hosts the only existing global database on migrant deaths.
+More than 32,000 migrants around the world have lost their lives since the project began in 2014. More than half of these deaths were recorded in the Mediterranean Sea, which has seen a devastating spike in deaths in recent years. The Missing Migrants Project collaborates with various government and non-government entities to collect data, and also draws on media and other available sources of information.
+<https://gmdac.iom.int/missing-migrants-project-0> Footnote^[This is in the footnote.]
+Still have to correct here !!!
+
+## Cleaning data
+
+```{r prepare-data}
+# convert all variable names to lowercase and replace spaces with underscores
+df <- df %>%  
+  clean_names() 
+
+# convert reported_date from character to date format 
+df <- df %>%  
+  mutate(reported_date = parse_date(reported_date, format = "%B %d, %Y"))
+
+# Separate location_coordinates to latitude and longitude 
+df <- df %>%
+  filter(location_coordinates  != "0,0") %>%
+  separate(location_coordinates, into = c("lat", "lon"), sep = ",")
+```
+
+
+## Variable description
+
+
+```{r summary statistics}
+# overview summary statistics of the dataframe
+summary(df)
+
+# describe and give summary for each variable
+describe(df)
+
+# overview histograms of all numerical variables
+df_numerical <- df[, sapply(df, is.numeric)] 
+hist.data.frame(df_numerical)
+
+# count missing values and percentage of missing values in each column
+d_missing_values <- df %>%
+  select(everything()) %>%  
+  summarise_all(funs(sum(is.na(.)))) %>%  
+  bind_rows(df %>% 
+              summarise_each(funs(100 * mean(is.na(.))))) %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  rename(number_missing_values = V1, 
+         percentage = V2) %>% 
+  mutate(percentage = round(percentage, 1))
+d_missing_values
+```
+
+# Data analysis
+
+
+```{r set up theme for ggplot}
+my_theme_general <- theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 11)) 
+
+my_theme_bar_chart <- theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        text = element_text(size = 11))
+
+my_theme_heat_map <-  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 11),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+## Mapping incidents
+
+```{r map}
+# Select the data dead & missing, lon, lat
+d_dead_missing_lon_lat <- df %>% 
+  select(total_dead_and_missing, lon, lat) %>% 
+  ## to filter wrong values outside of the earth
+  filter(as.numeric(lat) >= -80 & as.numeric(lat) <= 75)
+
+# test <- df %>% 
+#   select(total_dead_and_missing, lon, lat) %>% 
+#   filter(as.numeric(lat) >= -80 & as.numeric(lat) <= 75)
+# test2 <- as_tibble(test)
+# test3 <- st_as_sf(test2, coords = c("lon", "lat"))
+# mapview(test3)
+
+
+# Map of total dead & missing
+world <- map_data("world")
+
+ggplot() + 
+  geom_polygon(data = world, aes(x = long, y = lat, group = group), 
+               fill = NA, color = "#adb5bd") +
+  coord_fixed(1.3) +
+  geom_point(data = d_dead_missing_lon_lat,
+             aes(x = as.numeric(lon), y = as.numeric(lat), 
+                 color = total_dead_and_missing, size = total_dead_and_missing),
+             alpha = 0.5) +
+  scale_color_gradient(low = "#277da1", high = "#b7094c") +
+  labs(col = "Total dead & missing") +
+  ggtitle("Total death and missing map") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+```
+
+## Deaths and dissappearances
+
+```{r total of dead & missing}
+# scatter plot number_dead & minimum_estimated_number_of_missing
+d_filter_number_dead <- df %>% 
+  filter(number_dead <= 400)
+
+ggplot(d_filter_number_dead, aes(number_dead, minimum_estimated_number_of_missing)) + 
+  geom_point(alpha = 0.7, color = "#264653" ) +
+  labs(title = "Number of dead vs minimun estimated number of missing",
+       x = " Number of dead", y = "Minimun estimated number of missing") +
+  my_theme_general + 
+  theme(panel.grid.minor = element_blank())
+
+# number of dead by region
+  d_dead_region <- df %>% 
+  count(region, wt = number_dead, sort = TRUE)
+
+## ordered flipped bar chart number of dead by region
+ggplot(d_dead_region, 
+       aes(x = reorder(region, n), y = n)) +
+  geom_col(fill = "#415a77") + 
+  geom_text(aes(label = n, y = n + 500), size = 3, hjust = 0) +
+  labs(title = "Number of dead by region", x = "Region", y = "Number of dead") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25000)) +
+  my_theme_bar_chart
+  
+# total of dead & missing by region
+d_dead_missing_region <- df %>% 
+  count(region, wt = total_dead_and_missing, sort = TRUE)
+
+## ordered flipped bar chart total of dead & missing by region
+plot_dead_missing_region <- ggplot(d_dead_missing_region, 
+                                   aes(x = reorder(region, n), y = n)) +
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n, y = n + 500), hjust = 0, size = 3) +
+  labs(title = "Total of dead and missing by region", 
+       x = "Region", y = "Total dead and missing") +
+  coord_flip() + 
+  scale_y_continuous(limits = c(0, 25000)) +
+  my_theme_bar_chart
+
+## way 1: compare the two plots side by side
+plot_dead_region + plot_dead_missing_region
+
+## way 2: make both number_dead and total_dead_and_missing in one plot
+### create data frame with two columns
+d_two_case <- df %>%  
+  group_by(region) %>% 
+  summarise(sum_dead = sum(number_dead, na.rm = TRUE), 
+            sum_total_dead_and_missing = 
+              sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  arrange(-sum_dead)
+ 
+### plot two variables in one flip bar chart
+ggplot(d_two_case, aes(x = reorder(region, sum_total_dead_and_missing))) +
+  geom_point(aes(y= sum_dead), size = 2, color = "red") +
+  #geom_text(aes(label = sum_dead), size = 3, hjust = 0) +
+  geom_col(aes(y = sum_total_dead_and_missing), alpha = 0.7, fill = "#415a77") + 
+  geom_text(aes(label = sum_total_dead_and_missing, y = sum_total_dead_and_missing), 
+            size = 3, hjust = -0.6) +
+    labs(title = "Comparison dead and total dead and missing by region", 
+         subtitle = "Red dot = number of dead, blue bar = Total of dead and missing",
+         x = "Region", y = "Number of case") +
+    coord_flip() +
+    scale_y_continuous(limits = c(0, 25000)) +
+    # scale_color_manual(values = c("number_dead" = "red",
+    #                               'Total_dead_and_missing' = "#264653")) +
+    my_theme_bar_chart
+
+## violin plot total of dead & missing by region
+ggplot(df, aes(x = region, y = total_dead_and_missing)) +
+  geom_violin(binaxis = "y", 
+               stackdir = "center", 
+               dotsize = 0.2, 
+               inherit.aes = TRUE,
+               method = "jitter") +
+  theme_minimal() + 
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+## strip chart
+stripchart(total_dead_and_missing ~ region, data = df, vertical = TRUE,
+pch = 16, method = "jitter")
+
+## density plot total dead & missing by region
+df %>%  
+  ggplot(aes(x = total_dead_and_missing, y = region)) + 
+  geom_jitter(alpha = 0.2, width = 0.1) +
+    ggridges::geom_density_ridges(color = "#0077b6", fill = "#c3baba") +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "Distribution of total dead and missing by region",
+       y = "Region", x = "Total dead and missing") +
+  my_theme_general +
+  theme(plot.title = element_text(hjust = 0.5))
+
+## Jitter plot total dead & missing by region
+df %>%  
+  ggplot(aes(x = region, y = total_dead_and_missing)) + 
+  geom_jitter(alpha = 0.25, width = 0.2, color = "#2a6f97") +
+  labs(title = "Distribution of total dead and missing by region",
+       x = "Region", y = "Total dead and missing") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+
+# Total of dead & missing by year
+d_dead_missing_year <- df %>% 
+  ## exclude 2021 because data do not cover full year
+  filter(reported_year != 2021) %>% 
+  count(reported_year, wt = total_dead_and_missing, sort = TRUE) 
+
+## Line chart total dead & missing by year
+plot_dead_missing_year <- ggplot(d_dead_missing_year, 
+                                 aes(x = reported_year, y = n),) +
+  geom_line(color = "#415a77", size = 1) +
+  geom_point(color = "#415a77", size = 3) +
+  geom_text(aes(label = n), size = 3, hjust = -0.7, vjust = 1) +
+  labs(title = "Total dead and missing by year", 
+       x = "Year", y = "Total dead and missing") +
+  scale_x_continuous(breaks = seq(2014, 2021, 1)) +
+  scale_y_continuous(limits = c(0, 8500)) +
+  theme_minimal() + 
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
+
+## Line chart: comparison total dead & missing in 3 years (2017 - 2020)
+df %>% 
+  group_by(reported_year, reported_month) %>% 
+  filter(reported_year %in% c(2017, 2018, 2019, 2020)) %>%  
+  summarise(sum_dead_missing = sum(total_dead_and_missing)) %>% 
+  ungroup() %>%
+  ggplot(aes(x = factor(reported_month, levels = month.abb), 
+             y = sum_dead_missing, 
+             color = as.factor(reported_year), 
+             group = reported_year)) +
+  geom_line(aes(), size = 1) +
+  geom_point(size = 2) +
+  scale_y_continuous(limits = c(0, 1000)) +
+  labs(title = "Comparison on the total dead and missing by month from 2017 to 2020", 
+       x = "Month", 
+       y = "Total dead & missing") +
+  scale_color_manual(values = c("#f72585", "#52b788", "#fe7f2d", "#415a77")) +
+  guides(col=guide_legend("Reported year")) +
+  my_theme_general
+
+# Total of dead & missing by month
+d_dead_missing_month <- df %>% 
+  filter(reported_year != 2021) %>% 
+  count(reported_month, wt = total_dead_and_missing, sort = TRUE) 
+
+
+## Lollipop chart total dead & missing by month
+ggplot(d_dead_missing_month, 
+       aes(x = factor(reported_month, levels = month.abb), y = n)) +
+  geom_segment(aes(x = factor(reported_month, levels = month.abb), 
+                   xend = yefactor(reported_month, levels = month.abb), 
+                   y = 0, yend = n), size = 1.5, color = "#52b788") + 
+  geom_point(color = "#415a77", size = 8, alpha = 0.8) +
+  geom_text(aes(label = n, y = n), size = 3, vjust = -2.2) +
+  labs(title = "Total dead and missing by month", 
+       x = "Month", y = "Total dead & missing") +
+  scale_y_continuous(limits = c(0, 4100)) +
+  my_theme_general + 
+  theme(panel.grid.major = element_blank())
+
+
+# make a new column for season
+df <-df %>% 
+  mutate(
+    season = case_when(
+      reported_month %in% c("Oct", "Nov", "Dec") ~ "Fall",
+      reported_month %in%  c("Jan", "Feb", "Mar")  ~ "Spring",
+      reported_month %in%  c("Apr", "May", "Jun")  ~ "Summer",
+      TRUE ~ "Winter"))
+
+# check total dead & missing by season
+d_dead_missing_season <- df %>%
+  filter(reported_year != 2021) %>% 
+  count(season, wt = total_dead_and_missing, sort = TRUE)
+
+## plot with season
+df %>%
+  ## make an order for seasons
+  mutate(ordered_season = fct_relevel(season, c("Spring", "Summer", 
+                                                "Fall", "Winter"))) %>%
+  ggplot(aes(x = ordered_season, y = total_dead_and_missing)) +
+  geom_col()
+
+
+# Total of dead & missing by migration_route
+d_dead_missing_migration_route <- df %>% 
+  count(migration_route, wt = total_dead_and_missing, sort = TRUE) %>%
+  ## change NA value to "Unknown" to sort the plot
+  mutate(migration_route = ifelse(is.na(migration_route), 
+                                  "Unknown", migration_route))
+
+## flip bar chart total dead & missing by migration route
+plot_dead_missing_migration_route <- ggplot(d_dead_missing_migration_route, 
+                                            aes(x = reorder(migration_route, n), 
+                                                y = n)) + 
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n), size = 3, hjust = -0.5, vjust = 1) +
+  labs(title = "Total dead and missing by migration route", 
+       x = "Migration route", y = "Total dead & missing") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 21000)) +
+  my_theme_bar_chart
+
+## jitter plot total dead & missing by migration route
+df %>%  
+  mutate(migration_route = ifelse(is.na(migration_route), 
+                                  "Unknown", migration_route)) %>% 
+  ggplot(aes(x = migration_route, y = total_dead_and_missing)) + 
+  geom_jitter(alpha = 0.35, width = 0.25, color = "#2a6f97") +
+  labs(title = "Distribution of total dead and missing by migration route",
+       x = "Migration route", y = "Total dead and missing") +
+  theme_minimal() +
+  # coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+## density plot total dead & missing by migration route
+df %>%  
+  ggplot(aes(x = total_dead_and_missing, y = migration_route)) + 
+  geom_jitter(alpha = 0.2, width = 0.1) +
+    ggridges::geom_density_ridges(color = "#0077b6", fill = "#c3baba") +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(title = "Distribution of total dead and missing by migration route",
+       y = "Migration route", x = "Total dead and missing") +
+  my_theme_general +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r male-female-children}
+# Create a function to calculate sum and percentage of male, female & children
+function_gender_children <- function(data) {
+  data %>% 
+    summarise(sum_men = sum(number_of_males, na.rm = TRUE), 
+              sum_women = sum(number_of_females, na.rm = TRUE),
+              sum_children = sum(number_of_children, na.rm = TRUE),
+              sum_total_dead_and_missing = sum(total_dead_and_missing, na.rm = TRUE),
+               ) %>%  
+    mutate(perc_known_male = round(100 * (sum_men / sum_total_dead_and_missing), 1), 
+           perc_known_female = round(100 * (sum_women / sum_total_dead_and_missing), 1),
+           perc_known_children = round(100 * (sum_children / sum_total_dead_and_missing),1))
+}
+
+# Overview on percentage of known male, female & children on the total dead & missing
+d_perc_known_male_female_children <- df %>%  
+  function_gender_children()
+d_perc_known_male_female_children
+
+# Percentage of know male, female & children by region
+d_perc_known_male_female_children_by_region <- df %>%
+  group_by(region) %>% 
+  function_gender_children()
+d_perc_known_male_female_children_by_region
+
+# percentage male, female, children by region
+d_male_female_children_perc_region <- df %>%  
+  select(region, number_of_children, number_of_males, number_of_females) %>% 
+  group_by(region) %>%  
+  summarise(total_children = sum(number_of_children, na.rm = TRUE), 
+            total_males = sum(number_of_males, na.rm = TRUE), 
+            total_females = sum(number_of_females, na.rm = TRUE)) %>%
+  ## pivot long 
+  pivot_longer(cols = c(total_children, total_males, total_females)) %>%
+  ## calculate the percentage per region -> important
+  group_by(region) %>%  
+  mutate(perc = 100 * (value / sum(value))) %>% 
+  ungroup()
+
+## Stack bar chart male, female, children by region
+d_male_female_children_perc_region %>%  
+  ## exclude Central Asia due to no data
+  filter(region != "Central Asia") %>%  
+  ggplot(aes(x = region, y=perc, fill = name)) + 
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  geom_col(color = "white") + 
+  geom_text(aes(label = ifelse(round(perc) < 3, "", paste0(round(perc), "%"))), 
+            position = position_stack(vjust = 0.5), size = 3, color = "white") + 
+  scale_fill_manual(values = c("#06d6a0","#f72585", "#355070")) +
+  coord_flip() +
+  labs(title = "Male, female, children total dead and missing by region", 
+       y = "Nomalised percentage of dead & missing",
+       x = "Region") + 
+  my_theme_bar_chart
+
+# percentage of know male, female & children by month
+d_perc_known_male_female_children_by_month <- df %>% 
+  group_by(reported_month) %>% 
+  function_gender_children()
+d_perc_known_male_female_children_by_month
+
+# number of male, female, children by year
+d_known_male_female_children_by_year <- df %>% 
+  group_by(reported_year) %>% 
+  function_gender_children() %>% 
+  select(reported_year, sum_men, sum_women, sum_children) %>% 
+  filter(reported_year!= 2021) %>% 
+  ## important to pivot long here
+  pivot_longer(cols = c(sum_men, sum_women, sum_children))
+
+
+
+## dodge bar chart comparison male, female, children by year
+d_known_male_female_children_by_year %>%  
+  mutate(name = fct_relevel(name, c("sum_men, sum_women, sum_children"))) %>% 
+ggplot(aes(reported_year, value)) +   
+  geom_bar(aes(fill = name), width = 0.6,
+           position = position_dodge(0.6), stat="identity") +
+  scale_fill_manual(values = c("#06d6a0", "#355070", "#f72585")) +
+  labs(title = "Comparison men, women and children by year",
+       x = "Year", y = "Total dead and missing") +
+  scale_x_continuous(breaks = seq(2014, 2020, 1),
+                     labels = seq(2014, 2020, 1)) +
+  my_theme_general + 
+  theme(panel.grid.major.x = element_blank(), 
+        panel.grid.minor.x = element_blank())
+
+# percentage male, female, children by year
+d_known_male_female_children_by_year <- df %>% 
+  group_by(reported_year) %>% 
+  function_gender_children()  
+  
+  # select(reported_year, , sum_women, sum_children) %>% 
+  # filter(reported_year %in% c(2014, 2015, 2016, 2017, 2018, 2019, 2020)) %>% 
+  # melt(id.vars = "reported_year")
+
+```
+
+
+## Cause of death
+
+
+```{r cause-of-death}
+# Investigate on the cause of death column
+unique(df[c("cause_of_death")])
+length(unique(df$cause_of_death))
+
+# View the cause of death in a descending order
+d_cause_before_encode <- df %>% 
+  count(cause_of_death, sort = TRUE) 
+
+
+## Wordcloud using wordcloud2 to show the sentences 
+wordcloud2(data = d_cause_before_encode, size = 4)
+
+
+## Wordcloud using wordcloud to show keywords
+wordcloud(words = df$cause_of_death, max.words = 300, 
+          random.order = FALSE, colors = brewer.pal(8, "Dark2"),
+          rot.per=0.35)
+
+# Encode the variable cause of death from 426 unique values to 18 groups
+df <- df %>% 
+  mutate(cause_encoded =
+           case_when(
+             str_detect(cause_of_death, "Sexual|sexual|Rape|rape") ~ "Sexual abuse",
+             str_detect(cause_of_death, "Sickness|sickness|diabetic|heart attack|
+             meningitis|virus|cancer|bleeding|insuline|inhalation|Organ|Coronary|
+             Envenomation|Post-partum|Respiratory|Hypoglycemia|Exhaustion|
+             Heat stroke") ~ "Health condition",
+             str_detect(cause_of_death, "harsh weather|Harsh weather|Harsh conditions|
+                        harsh conditions") ~ "Harsh conditions and weather",
+             str_detect(cause_of_death, "Unknown|unknown") ~ "Unknown",
+             str_detect(cause_of_death, "Starvation|starvation|
+                        Malnutrition|malnutrition") ~ "Starvation",
+             str_detect(cause_of_death, "dehydration|Dehydration") ~ "Dehydration",
+             str_detect(cause_of_death, "Drowning|drowning|Pulmonary|respiratory|
+                        lung|bronchial|pneumonia|Pneumonia") ~ "Drowning",
+             str_detect(cause_of_death, "hyperthermia|Hyperthermia") ~ "Hyperthermia",
+             str_detect(cause_of_death, "hypothermia|Hypothermia") ~ "Hypothermia",
+             str_detect(cause_of_death, "asphyxiation|suffocation") ~ "Suffocation",
+             str_detect(cause_of_death, "train|bus|vehicle|truck|boat|car|road|
+             van|plane|collision|Train|Bus|Vehicle|Truck|Boat|Car|Road|Van|Plane|
+             Collision") ~ "Vehicle",
+             str_detect(cause_of_death, "murder|stab|shot|violent|blunt force|
+             violence|beat-up|fight|murdered|death|Murder|Stab|Shot|Violent|
+             Blunt force| Violence|Beat-up|Fight|Murdered|Death|Hanging|Apache|
+             mortar|landmine|Gassed") ~ "Murder",
+             str_detect(cause_of_death, "crushed to death|crush|Crush|
+                        Rockslide") ~ "Crushed",
+             str_detect(cause_of_death, "burn|burns|burned|fire|Burn|Burns|
+                        Burned|Fire") ~ "Burned",
+             str_detect(cause_of_death, "electrocution|Electrocution") 
+             ~ "Electrocution",
+             str_detect(cause_of_death, "Fall|fall") ~ "Fallen",
+             str_detect(cause_of_death, "crocodile|hippopotamus|hippoptamus") 
+             ~ "Killed by animals",
+             str_detect(cause_of_death, "exposure|Exposure") ~ "Exposure",
+             TRUE ~ "Unknown"
+           ))
+
+# Check how many times each cause_encoded appears 
+d_cause_encoded <- df %>% 
+  count(cause_encoded, sort = TRUE) 
+
+# Check total dead & missing by each cause_encoded
+d_dead_missing_cause_encoded <- df %>% 
+  count(cause_encoded, wt = total_dead_and_missing)
+
+## Bar chart of count of encoded cause of death
+ggplot(d_cause_encoded, 
+       aes(x = reorder(cause_encoded, n), y = n)) +
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n), size = 3, hjust = -0.5, vjust = 1) +
+  labs(title = "Cause of dead", 
+       x = "encoded cause of dead", y = "count") +
+  coord_flip() +
+  my_theme_bar_chart
+
+
+## Jitter plot total dead & missing by cause of death
+ggplot(df, aes(x = cause_encoded, y = total_dead_and_missing)) +
+  geom_jitter(alpha = 0.25, width = 0.2, color = "#7209b7") +
+  labs(title = "Distribution of total dead and missing by cause of death",
+       x = "Encoded cause of death", y = "Total dead and missing") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+## Heat map total dead & missing, cause of death, region
+ggplot(df, aes(x = region, y = cause_encoded, fill = total_dead_and_missing)) +
+  geom_tile(color = "white", lwd = 1, linetype = 1) +
+  # scale_fill_continuous(breaks = c(0, 800)) +
+  coord_equal() + 
+  scale_fill_gradientn(
+    breaks = seq(0, 800, 100),
+    colours = c("#1b4965", "#1780a1", "#2e6f95", "#455e89", 
+                "#723c70", "#892b64", "#a01a58", "#b7094c"),
+    values = scales::rescale(seq(0, 800, 100))) +
+  labs(title = "Total incidents by cause of deaths and regions", 
+       y = "Encoded cause of dead", x = "Region") +
+  my_theme_heat_map
+
+
+## Heat map total dead & missing, cause of death, migration route
+ggplot(df, aes(x = migration_route, y = cause_encoded, 
+               fill = total_dead_and_missing)) +
+  geom_tile(color = "white", lwd = 1, linetype = 1) +
+  scale_fill_viridis(discrete=FALSE) +
+  coord_equal() +
+  my_theme_heat_map
+
+
+## Heat map total dead & missing, cause of death, year
+ggplot(df, aes(x = migration_route, y = factor(reported_month, levels = month.abb),
+               fill = total_dead_and_missing)) +
+  geom_tile(color = "white", lwd = 1, linetyle = 1) +
+  scale_fill_gradient2(breaks = c(0,100, 200, 300, 400, 500, 600, 700, 800),
+                       low = "#003f5c", mid = "#003f5c", high = "#bc5090") +
+  my_theme_heat_map
+
+
+###### Create a 6-in-1 plot for top 6 regions and top 6 causes
+# Top 6 regions with the highest total dead & missing
+d_top_region <- df %>% 
+  select(region, total_dead_and_missing) %>% 
+  group_by(region) %>% 
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  top_n(6)
+
+# Get the 6 overall most frequent cause of dead/missins
+d_top_deadliest_causes <- df %>% 
+  filter(cause_encoded != "Unknown") %>% 
+  group_by(cause_encoded) %>%  
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  arrange(-total) %>% 
+  top_n(6)
+
+## first plot -> not good because different causes for each region
+df %>%  
+  filter(cause_encoded %in% d_top_deadliest_causes$cause_encoded, 
+         region %in% d_top_region$region) %>% 
+  group_by(region, cause_encoded) %>% 
+  summarise(total_dead_missing = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  ungroup() %>%  
+    ggplot(aes(x = cause_encoded, y = total_dead_missing)) +
+  geom_col() +
+  facet_wrap(~ region) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+## second try without top 6 reasons -> not good because different causes for each region   
+df %>%  
+  filter(region %in% d_top_region$region) %>% 
+  group_by(region, cause_encoded) %>% 
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  ungroup() %>%  
+    ggplot(aes(x = cause_encoded, y = total)) +
+  geom_col() +
+  facet_wrap(~ region) +
+  coord_flip()
+
+
+#### Each region has their different top reason, we have to plot each region
+# Mediterranean top 5 cause of death
+plot1 <- df %>%
+  filter(region %in% "Mediterranean") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("Mediterranean") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# North Africa top 5 cause of death
+plot2 <- df %>%
+  filter(region %in% "North Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("North Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# US-Mexico Border top 5 cause of death
+plot3 <- df %>%
+  filter(region %in% "US-Mexico Border") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("US-Mexico Border") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Sub-Saharan Africa top 5 cause of death
+plot4 <- df %>%
+  filter(region %in% "Sub-Saharan Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("Sub-Saharan Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Southeast Asia top 5 cause of death
+plot5 <- df %>%
+  filter(region %in% "Southeast Asia") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("Southeast Asia") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Horn of Africa top 5 cause of death
+plot6 <- df %>%
+  filter(region %in% "Horn of Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat="identity", fill="steelblue", alpha=.6, width=.4) +
+  ylab("Total dead & missing") +
+  xlab("Horn of Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol = 2, nrow = 3)
+
+
+```
+
+
+
+## Survivors
+
+```{r survivors}
+# create a new variable: total death, missing & survivors 
+df <- df %>% 
+  mutate(total_dead_missing_survivor = 
+           ifelse(is.na(total_dead_and_missing), 
+                  0, 
+                  total_dead_and_missing) + 
+           ifelse(is.na(number_of_survivors), 
+                  0, 
+                  number_of_survivors))
+
+
+# percentage of known survivors on the total death, missing & survivors
+df %>% 
+  summarise(perc_survivor = round(100 * (number_of_survivors / 
+                                           total_dead_missing_survivor), 1))
+
+# df %>%
+#    replace(is.na(.), 0) %>%
+#    mutate(sum = rowSums(total_dead__missing, number_of_survivors))
+
+# ranking on the number of survivors by region
+d_survivor_region <- df %>% 
+  count(region, wt = number_of_survivors, sort = TRUE) 
+
+## lolipop chart survivor by region
+ggplot(d_survivor_region, aes(x = reorder(region, n), y = n)) +
+  geom_segment(aes(x = reorder(region, n), xend = reorder(region, n), 
+                   y = 0, yend = n), size = 1, color = "skyblue") + 
+  geom_point( color="blue", size = 4, alpha = 0.6) +
+  geom_text(aes(label = n, y = n + 500), size = 3, hjust = 0) +
+  labs(title = "Number of survivor by region", 
+       x = "Region", y = "Number of survivor") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 50000)) +
+  my_theme_bar_chart
+
+# ranking on the number of survivors by year
+df %>% 
+  count(reported_year, wt = number_of_survivors, sort = TRUE) 
+
+# ranking on the number of survivors by month
+df %>% 
+  count(reported_month, wt = number_of_survivors, sort = TRUE) 
+
+# ranking on the number of survivors by migration_route
+d_survivor_migration_route <- df %>% 
+  count(migration_route, wt = number_of_survivors, sort = TRUE) %>% 
+  ## change NA value to "Unknown" to sort the plot
+  mutate(migration_route = ifelse(is.na(migration_route), 
+                                  "Unknown", migration_route))
+
+## lolipop chart survivor by region
+ggplot(d_survivor_migration_route, aes(x = reorder(migration_route, n), y = n)) +
+  geom_segment(aes(x = reorder(migration_route, n), 
+                   xend = reorder(migration_route, n), 
+                   y = 0, yend = n), size = 1, color = "skyblue") + 
+  geom_point( color="blue", size = 5, alpha = 0.6) +
+  geom_text(aes(label = n, y = n + 500), size = 3, hjust = -0.5) +
+  labs(title = "Number of survivor by migration route", 
+       x = "Migration route", y = "Number of survivor") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 45000)) +
+  my_theme_bar_chart
+```
+
+## Source
+
+```{r source-quality}
+## Heat map source by region filled by total incidents
+df_source <- df %>%
+  group_by(region, source_quality) %>%
+  summarise(total_incidents = sum(total_dead_and_missing))
+
+ggplot(df_source, aes(region, source_quality, fill= total_incidents)) + 
+  geom_tile(color = "white", lwd = 1, linetype = 1) +
+  scale_fill_viridis(discrete=FALSE) +
+  coord_equal() +
+  xlab("Region") +
+  ylab("Source quality") +
+  ggtitle("Source quality and region") +
+  my_theme_heat_map
+
+## Dodge bar chart source by region
+df %>% 
+  group_by(region, source_quality) %>% 
+  filter(!(region %in% c("Northern Africa", "East Asia", "Central Asia", 
+                         "North America", "Eastern Africa"))) %>% 
+  count(source_quality) %>% 
+  ggplot(aes(x = region, y = n, 
+             fill = as.factor(source_quality))) +
+  geom_col() +
+  coord_flip() +
+  my_theme_general
+  
+
+# Calculate source proportion in each region
+df %>% 
+  group_by(region, source_quality) %>% 
+  ## filter the regions with too few data points
+  filter(!(region %in% c("Northern Africa", "East Asia", "Central Asia",
+                         "North America", "Eastern Africa"))) %>%
+  count(source_quality) %>%
+  group_by(region) %>% 
+  mutate(perc = 100 * (n / sum(n))) %>% 
+  ungroup() %>%
+  ## Stack bar chart
+  ggplot(aes(x = region, y = perc, fill = as.factor(source_quality))) + 
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  geom_col(color = "white") + 
+  geom_text(aes(label = ifelse(round(perc) <3, "", paste0(round(perc), "%"))),
+            position = position_stack(vjust = 0.5), 
+            size = 3, color = "white") +
+  # scale_fill_manual(values = c("#003f5c", "#58508d", "#bc5090", "#ff6361", "#ffa600")) +
+  scale_fill_manual(values = c("#c3e7ff","#96bed9", 
+                               "#6a96b3", "#3e708f", "#004c6d")) +
+  coord_flip() +
+  labs(title = "Source quality by region", 
+       y = "Nomalised percentage of source quality",
+       x = "Region") + 
+  guides(fill=guide_legend(title="Source quality")) +
+  my_theme_bar_chart
+  
+
+```
+
+
+```{r model}
+# create df for the model, here we do not use dplyr to match with the package
+df_red <- df[c("total_dead_and_missing","lat","lon")]
+df_red <- as.data.frame(sapply(df_red, as.numeric))
+colnames(df_red) <- c("z", "y", "x")
+df_red <- df_red[c("x", "y", "z")]
+
+library(MASS)
+library(spatial)
+
+# Fits a trend Surface by Least-squares 
+surf <- surf.ls(6, df_red)
+# Evaluate trend surface over a grid
+trsurf <- trmat(surf, min(df_red$x), max(df_red$x),
+                min(df_red$y), max(df_red$y), 50)
+# Regression diagnostics for trend surfaces
+infl_surf <- trls.influence(surf)
+cand <- as.data.frame(infl_surf)[abs(infl_surf$stresid) > 1.5,]
+cand_xy <- df_red[as.integer(rownames(cand)), c("x", "y")]
+
+eqscplot(trsurf, type = "n")
+contour(trsurf, add = TRUE, col = "grey")
+plot(surf, add = TRUE, div = 100)
+points(cand_xy, pch = 16, col = "orange")
+title(main = "Surface mapping")
+```
+
+
+
+

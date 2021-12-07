@@ -1,0 +1,1053 @@
+---
+title: "Missing Migrant Project"
+author: "Quyen Duong, Nhu Casati Nguyen"
+date: "Last edited `r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+      collapsed: false 
+      smooth_scroll: false
+    toc_depth: 3
+    number_section: true 
+---
+
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 14px;
+  }
+td {  /* Table  */
+  font-size: 12px;
+}
+h1.title {
+  font-size: 42px;
+  font-weight: bold;
+  text-align: center;
+  color: #226d8c;
+  opacity: 0.8;
+}
+h4.author { 
+  font-size: 20px;
+  color: #226d8c;
+  text-align: center;
+}
+h4.date { 
+  font-size: 15px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkRed;
+  text-align: center;
+}
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: Black;
+  font-weight: bold;
+}
+h2 { /* Header 2 */
+    font-size: 22px;
+  color: Black;
+  font-weight: bold
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  color: Black;
+  font-weight: bold
+}
+
+</style>
+
+```{r setup, include = FALSE}
+# Set the default mode for all the chunks
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.align = "center")
+```
+```{r data, include = FALSE}
+# Load packages
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(scales)
+library(gridExtra)
+library(tidyr)
+library(readr)
+library(knitr)
+library(lintr)
+library(janitor)
+library(Hmisc)
+library(patchwork)
+library(wordcloud)
+library(wordcloud2)
+library(RColorBrewer)
+library(tm)
+library(ggridges)
+library(ggpol)
+library(conflicted)
+library(reshape2)
+#library(hrbrthemes)
+library(ggmap)
+library(maps)
+library(mapdata)
+#library(RgoogleMaps)
+#library(sf)
+#library(mapview)
+
+
+# Set conflict preference
+conflict_prefer("filter", "dplyr")
+conflict_prefer("select", "dplyr")
+
+
+# Load and read csv files
+df <- read_csv("dataset/MissingMigrants-Global-2021-09-05T18-37-06.csv")
+head(df)
+glimpse(df)
+str(df)
+```
+
+# Introduction
+
+## Motivation
+
+Since 2014, more than 35,000 lives have been lost during migration, with many tragedies along various international migration routes. This fatal fact initiated the International Organization for Migration (IOM) to create  Missing Migrant Project (MMP) with funding from governments such as Switzerland and the United Kingdom. Today, the project has evolved to a crucial and far-reaching center of data and information for policymakers, researchers, and the public. 
+
+The MMP records deaths and disappearances of migrants, covering asylum-seekers and refugees. The data from [ the MMP](https://gmdac.iom.int/missing-migrants-project-0) are from a variety of sources, including national authorities, NGOs, media reports, and interviews with surviving migrants. For more information about MMP, please visit: <https://gmdac.iom.int/missing-migrants-project-0>
+
+Inspired by the MMP, the analysis report gathers the dead and missing migrant data from IOM and aims to gain knowledge and grasp of incidents and shed some light on the deaths of thousands of migrants fleeing from countries engulfed in warfare and conflicts.  
+
+## Methodology
+
+The methodology is described as follows:
+
+1. Obtain, and learn the data features 
+2. Clean and process the data 
+3. Make summary statistics and exploratory analysis
+4. Visualize various graphs
+   + Associate variables to investigate trend/pattern 
+   + Diagnose the messages from the visualizations 
+   + Form the most illuminating indicators
+5. Structure the report
+6. Choose the appropriate chart types
+7. Build a story through data visualization 
+8. Describe, analyze, and discuss the findings from charts 
+9. Build the model for estimating
+10. Write and finish up the report 
+
+The authors attempt to write codes mainly in the consistent tidyverse style with dplyr and ggplot2. However, to learn and have diverse applications, the model chapter uses base R codes. There are two R markdown files:
+
+- Exploratory_Data_Analysis_Draft: complete codes with all the plots 
+- Final_Report_Missing_Migrant_Project: for this report with selected relevant codes
+
+## Dataset
+
+Let's have a glimpse at the dataset: 
+```{r head-data, include = TRUE}
+glimpse(df)
+```
+
+## Variable description
+
+```{r variable-name, include = FALSE}
+No <- c("1", "2", "3", "4", "5", "6","7", "8", "9", "10", "11", "12", "13", 
+        "14", "15", "16", "17", "18", "19", "20")
+Variable_name <- c("Web ID", "Region of accident", "Reported date", 
+                   "Reported year", "Reported month", "Number dead",
+                   "Minimum Estimated Number of Missing", 
+                   "Total dead and missing", "Number of Survivors", 
+                   "Number of Females", "Number of Males", "Number of children", 
+                   "Cause of Death", "Location Description", 
+                   "Information Source", "Location Coordinates", 
+                   "Migration Route", "URL", "UNSD Geographical Grouping", 
+                   "Source Quality")
+Data_type <- c("number", "string", "string", "number", "number", "string", 
+               "number", "number", "number", "number", "number", "number", 
+               "string", "string", "string", "string", "string", "string", 
+               "string", "number")
+Description <- c("An automatically generated ID of WEB", 
+                 "The region in which an incident took place", 
+                 "Estimated date of death or finding a body", 
+                 "The year in which the incident occurred ", 
+                 "The month in which the incident occurred ", 
+                 "The total number of people confirmed dead in one incident", 
+                 "The total number of those who are missing and are thus assumed to be dead (minimum)", 
+                 "The sum of the ‘number dead’ and ‘Minimum Estimated Number of Missing’ variables", 
+                 "The number of survivors", 
+                 "The number of females", "The number of males", 
+                 "The number of children", "The cause of death", 
+                 "Where the incident happened", "The source of information", 
+                 "The Coordinates of location", "The route of migration", 
+                 "The URL of a site where information about a given incident is written", 
+                 "The grouping of incidents based on their geo-location made by the UNSD", 
+                 "How much a source of information is reliable") 
+
+table <- data.frame(No, Variable_name,Data_type, Description)
+table
+```
+
+The variables are shortly explained as follows:
+
+```{r variable-table, include = TRUE, echo = FALSE}
+library(kableExtra)
+knitr::kable(table, "pipe", col.name = c("No.", "Variable name", "Data type", 
+                                         "Description"), 
+             align=c("l", "l", "l", "l")) %>% 
+  kable_styling(latex_options="scale_down")
+```
+
+
+## Data preparation
+
+```{r prepare-data, include=TRUE}
+# Convert all variable names to lowercase and replace spaces with underscores
+df <- df %>%  
+  clean_names() 
+
+# Convert reported_date from character to date format 
+df <- df %>%
+  mutate(reported_date = parse_date(reported_date, format = "%B %d, %Y"))
+
+# Separate location_coordinates to latitude and longitude 
+df <- df %>%
+  filter(location_coordinates  != "0,0") %>%
+  separate(location_coordinates, into = c("lat", "lon"), sep = ",")
+```
+
+Firstly, we change all the column names from capital letters with space to the small case with underscores. Next, we split the `location_coordinates` into `lon` and `lat` columns. We will handle the missing values in the other variables later when extracting the necessary variables for the analysis.
+
+
+## Missing values
+
+There are four variables (Minimum missing, Children, Survivors, Females), whose ratio of missing data exceeds 80%. Lack of data in those instances probably stems from the fact that: 
+
+-	For `minimum_estimated_number_of_missing`: many sources of information may not record the number of missing migrants, only those who have perished  
+- For `number_of_children`, `number_of_males`, `number_of_females`: in most cases, extremely hard to establish whether a perished or missing migrant was female, male, or a child.
+
+```{r missing-value, echo = FALSE}
+# Count missing values and percentage of missing values in each column
+d_missing_values <- df %>%
+  select(everything()) %>%  
+  summarise_all(funs(sum(is.na(.)))) %>%  
+  bind_rows(df %>% 
+              summarise_each(funs(100 * mean(is.na(.))))) %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  rename(number_missing_values = V1, 
+         percentage = V2) %>% 
+  mutate(percentage = round(percentage, 1))
+d_missing_values
+```
+
+```{r summary statistics, include = FALSE}
+# Overview summary statistics of the data frame
+summary(df)
+
+# Describe and give summary for each variable
+describe(df)
+
+# Overview histograms of all numerical variables
+df_numerical <- df[, sapply(df, is.numeric)] 
+hist.data.frame(df_numerical)
+```
+
+# Data analysis
+ 
+As the report's main focus, this chapter will tell a story of dead and missing migrants concerning the region, migration route, year, month. Then, examining the data in terms of male, female, and children brings a deeper layer to understand the scenario. Next, the quality source will also be discussed. Afterward, we will build a model for estimation and give conclusions and limitations at the end. 
+
+```{r set up theme for ggplot, include = FALSE}
+my_theme_general <- theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 11)) 
+
+my_theme_bar_chart <- theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        text = element_text(size = 11))
+
+my_theme_heat_map <-  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        text = element_text(size = 11),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+## Mapping incidents
+
+```{r map, out.width = "90%", fig.cap = '**Figure 1: Map of incidents**', fig.height = 5, echo = FALSE}
+# Select the data dead & missing, lon, lat
+d_dead_missing_lon_lat <- df %>% 
+  select(total_dead_and_missing, lon, lat) %>% 
+  ## To filter wrong values outside of the earth
+  filter(as.numeric(lat) >= -80 & as.numeric(lat) <= 75)
+
+# Map of total dead & missing
+world <- map_data("world")
+
+ggplot() + 
+  geom_polygon(data = world, aes(x = long, y = lat, group = group), 
+               fill = NA, color = "#adb5bd") +
+  coord_fixed(1.3) +
+  geom_point(data = d_dead_missing_lon_lat,
+             aes(x = as.numeric(lon), y = as.numeric(lat), 
+                 color = total_dead_and_missing, 
+                 size = total_dead_and_missing),
+             alpha = 0.3) +
+  scale_color_gradient(low = "#277da1", high = "#b7094c") +
+  labs(size = "Total dead and missing",
+       col = "Total dead and missing") +
+  # ggtitle("Map of incidents") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+
+From the world map, migrant fatalities occur in many regions, including Europe, Africa, Asia, America, the Middle East, the Mediterranean, etc. Each circle presents a data point corresponding to the number of deaths and missing persons. We use the diverging but not sequential color palette to display a clear difference between the low and high number of incidents with this dataset. Furthermore, the circle size also makes the case number more discernible. Overall, most of the recorded deaths occurred in the Mediterranean, North Africa, and US-Mexico border.
+
+
+## Deaths and disappearances
+
+### Incidents by regions
+
+The first two noticeable variables in this dataset are `number_dead` and `total_dead_and_missing`. The `total_dead_and_missing` is the sum of `number_dead` and the `minimum_estimated_number_of_missing`. As mentioned, there are many NA values in the `minimum_estimated_number_of_missing`. Therefore, we will make the comparison of these two variables in the two graphs below. However, we will focus more on the `total_dead_and_missing` for the rest of the analysis afterward.
+
+
+```{r two-plot-comparision,fig.cap = '**Figure 2: Number of dead by region and Total incidents by region**', fig.height = 5, echo = FALSE}
+# Number of dead by region
+d_dead_region <- df %>% 
+  count(region, wt = number_dead, sort = TRUE)
+
+## Ordered flipped bar chart number of dead by region
+plot_dead_region <- ggplot(d_dead_region, 
+       aes(x = reorder(region, n), y = n)) +
+  geom_col(fill = "#415a77") + 
+  geom_text(aes(label = n, y = n + 500), size = 3, hjust = 0) +
+  labs(title = "Number of dead by region", x = "Region", y = "Number of dead") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 25000)) +
+  my_theme_bar_chart
+  
+# Total of dead & missing by region
+d_dead_missing_region <- df %>% 
+  count(region, wt = total_dead_and_missing, sort = TRUE)
+
+## Ordered flipped bar chart total of dead & missing by region
+plot_dead_missing_region <- ggplot(d_dead_missing_region, 
+                                   aes(x = reorder(region, n), y = n)) +
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n, y = n + 500), hjust = 0, size = 3) +
+  labs(title = "Total incidents by region", 
+       x = "Region", y = "Total dead and missing") +
+  coord_flip() + 
+  scale_y_continuous(limits = c(0, 25000)) +
+  my_theme_bar_chart
+
+## Way 1: compare the two plots side by side
+plot_dead_region + plot_dead_missing_region
+```
+
+
+First and foremost, we would like to compare them side-by-side graphs with the same x-axis scale. By showing the concrete number next to each bar (Figure 2), we can easily understand the ranking in each region. 
+
+
+```{r one-plot-compare, echo = FALSE, fig.cap = '**Figure 3: Comparison dead and total dead and missing by region**', fig.height = 5}
+## way 2: make both number_dead and total_dead_and_missing in one plot
+### create data frame with two columns
+d_two_case <- df %>%  
+  group_by(region) %>% 
+  summarise(sum_dead = sum(number_dead, na.rm = TRUE), 
+            sum_total_dead_and_missing = 
+              sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  arrange(-sum_dead)
+ 
+### plot two variables in one flip bar chart
+ggplot(d_two_case, aes(x = reorder(region, sum_total_dead_and_missing))) +
+  geom_point(aes(y= sum_dead), size = 2, color = "red") +
+  #geom_text(aes(label = sum_dead), size = 3, hjust = 0) +
+  geom_col(aes(y = sum_total_dead_and_missing), alpha = 0.7, fill = "#415a77") + 
+  geom_text(aes(label = sum_total_dead_and_missing, y = sum_total_dead_and_missing), 
+            size = 3, hjust = -0.6) +
+    labs(#title = "Comparison dead and total dead and missing by region", 
+         subtitle = "Red dot = number of dead, blue bar = Total of dead and missing",
+         x = "Region", y = "Number of case") +
+    coord_flip() +
+    scale_y_continuous(limits = c(0, 25000)) +
+    # scale_color_manual(values = c("number_dead" = "red",
+    #                               'Total_dead_and_missing' = "#264653")) +
+    my_theme_bar_chart
+```
+
+Next, figure 3 gives a more coherent view of the differences between these two variables. The red point displays the number of the dead while the transparent blue bar implies the total dead and missing. Remarkably, some regions such as the US-Mexico border, central America, Middle East, Europe, South Asia, Central Asia, North America, and Eastern Africa did not address many vanishings. On the other hand, the red points are far behind the bar in the Mediterranean, North Africa, Southeast Asia, and the Caribbean, meaning that abundant missing incidents occurred or were reported in those areas.
+
+Afterward, the density plot gives us an overview of the distribution of total fatalities in different regions. Notably, the x-axis was set from 0 to 100 to exclude infrequent data points and make the trend of the most concentrated data visible. Overall, the majority of the data stay at the beginning, showing us a sensation of smaller incident numbers in each entry. Noticing that each entry is a day in the dataset. Most regions have more steep and narrow distributions, whereas Caribbean, Mediterranean, Southeast Asia, and East Asia's distributions are wider and wary in shape. 
+
+```{r density-plot-region, echo = FALSE, fig.cap = '**Figure 4: Distribution of total dead and missing by region**', fig.height = 5}
+## Density plot total dead & missing by region
+df %>%  
+  ggplot(aes(x = total_dead_and_missing, y = region)) + 
+  geom_jitter(alpha = 0.2, width = 0.1) +
+    ggridges::geom_density_ridges(color = "#0077b6", fill = "#c3baba") +
+  scale_x_continuous(limits = c(0, 100)) +
+  labs(#title = "Distribution of total dead and missing by region",
+       y = "Region", x = "Total dead and missing") +
+  my_theme_general +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Incidents by migration routes
+
+Like the `region`, it is also crucial to delve into the total occurrences in relation to the `migration_route`. The NA value in this variable depicts the undefined migration trail. We change the NA value to "Unknown" to sort the bar chart in descending order. The Central Mediterranean is the highest migratory path, with an alarming number of 17,386 documented deaths and disappearances.  Due to the route from Africa, Middle East, and war countries to Europe, the Central Mediterranean is popular with refugees and asylum-seekers. The second position belongs to the Unknown group with 14,582 cases. This is a different scenario compared to the region because many migrants might be found in a specific area but not clarified which route the migrants traveled.
+
+```{r bar-chart-migration-route, echo = FALSE, fig.cap = '**Figure : Total incidents by migration route**', fig.height = 5}
+# Total of dead & missing by migration_route
+d_dead_missing_migration_route <- df %>% 
+  count(migration_route, wt = total_dead_and_missing, sort = TRUE) %>%
+  ## change NA value to "Unknown" to sort the plot
+  mutate(migration_route = ifelse(is.na(migration_route), 
+                                  "Unknown", migration_route))
+
+## Flip bar chart total dead & missing by migration route
+plot_dead_missing_migration_route <- ggplot(d_dead_missing_migration_route, 
+                                            aes(x = reorder(migration_route, n), 
+                                                y = n)) + 
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n), size = 3, hjust = -0.5, vjust = 1) +
+  labs(#title = "Total incidents by migration route", 
+       x = "Migration route", y = "Total dead and missing") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 21000)) +
+  my_theme_bar_chart
+```
+
+The jitter plot aims to inspect the variant of the strip plot for each migration route with a better glimpse of overlapping data points. We want to visualize and compare the distribution among migration routes. As can be seen from the graph, data spread widely in the Central Mediterranean area, and there is a big-value data point of 700 in the Unknown group. Some areas announced very few cases, such as the Caribbean to Central America, Haiti to the Dominican Republic, Malaysia to Indonesia, and Venezuela to the Caribbean.     
+
+```{r jitter-plot-migration-route, echo = FALSE, fig.cap = '**Figure 5: Distribution of total dead and missing by migration route**', fig.height = 7}
+df %>%  
+  mutate(migration_route = ifelse(is.na(migration_route), 
+                                  "Unknown", migration_route)) %>% 
+  ggplot(aes(x = migration_route, y = total_dead_and_missing)) + 
+  geom_jitter(alpha = 0.35, width = 0.25, color = "#2a6f97") +
+  labs(#title = "Distribution of total dead and missing by migration route",
+       x = "Migration route", y = "Total dead and missing") +
+  scale_y_continuous(limits = c(0, 800)) +
+  theme_minimal() +
+  # coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+### Incidents by months
+
+```{r lollipop-chart-month, echo = FALSE, fig.cap = '**Figure 6: Total of dead & missing by month**', fig.height = 5}
+# Total of dead & missing by month
+d_dead_missing_month <- df %>% 
+  filter(reported_year != 2021) %>% 
+  count(reported_month, wt = total_dead_and_missing, sort = TRUE) 
+
+# Lollipop chart total dead & missing by month
+ggplot(d_dead_missing_month, 
+       aes(x = factor(reported_month, levels = month.abb), y = n)) +
+  geom_segment(aes(x = factor(reported_month, levels = month.abb), 
+                   xend = factor(reported_month, levels = month.abb), 
+                   y = 0, yend = n), size = 1.5, color = "#52b788") + 
+  geom_point(color = "#415a77", size = 8, alpha = 0.8) +
+  geom_text(aes(label = n, y = n), size = 3, vjust = -2.2) +
+  labs(#title = "Total incidents by month", 
+       x = "Month", y = "Total dead and missing") +
+  scale_y_continuous(limits = c(0, 4100)) +
+  my_theme_general + 
+  theme(panel.grid.major = element_blank())
+```
+
+Before analyzing the year trend in the section below, it is crucial to scrutinize the `total_dead_and_missing` migrants by `reported_month`. The lollipop plot exhibits a higher tendency in the last eight months of a year. Furthermore, a more significant occurrence number appears in these reported months: May, June, September, October, and December.
+
+
+### Incidents by year
+
+```{r line-chart-year, echo = FALSE, fig.cap = '**Figure 7: Total incidents by year**', fig.height = 5}
+# Total of dead & missing by year
+d_dead_missing_year <- df %>% 
+  ## Exclude 2021 because data do not cover full year
+  filter(reported_year != 2021) %>% 
+  count(reported_year, wt = total_dead_and_missing, sort = TRUE) 
+
+# Line chart total dead & missing by year
+plot_dead_missing_year <- ggplot(d_dead_missing_year, 
+                                 aes(x = reported_year, y = n),) +
+  geom_line(color = "#415a77", size = 1) +
+  geom_point(color = "#415a77", size = 3) +
+  geom_text(aes(label = n), size = 3, hjust = -0.7, vjust = 1) +
+  labs(title = "Total incidents by year", 
+       x = "Year", y = "Total dead and missing") +
+  scale_x_continuous(breaks = seq(2014, 2021, 1)) +
+  scale_y_continuous(limits = c(0, 8500)) +
+  theme_minimal() + 
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
+```
+
+Figure 7 demonstrates the sum of dead and missing people from 2014 to 2020. We exclude 2021 data in this line graph to avoid any misleading trend since 2021 is incomplete.  Strikingly, the total incidents peaked in 2018, with 8074 reported dead and missing migrants. In contrast, 2020 witnessed a considerably decreasing number of cases. One of the reasons could be the border lockdown during the pandemic period. COVID-19 and restrictions on borders have a substantial impact on migration cases. 
+
+
+```{r line-chart-2017-2020, echo = FALSE, fig.cap = '**Figure 7: Comparison on the total incidents by month from 2017 to 2020**', fig.height = 5}
+## Line chart: comparison total dead & missing in 3 years (2017 - 2020)
+df %>% 
+  group_by(reported_year, reported_month) %>% 
+  filter(reported_year %in% c(2017, 2018, 2019, 2020)) %>%  
+  summarise(sum_dead_missing = sum(total_dead_and_missing)) %>% 
+  ungroup() %>%
+  ggplot(aes(x = factor(reported_month, levels = month.abb), 
+             y = sum_dead_missing, 
+             color = as.factor(reported_year), 
+             group = reported_year)) +
+  geom_line(aes(), size = 1) +
+  geom_point(size = 2) +
+  scale_y_continuous(limits = c(0, 1000)) +
+  labs(#title = "Comparison on the total incidents by month from 2017 to 2020", 
+       x = "Month", 
+       y = "Total dead and missing") +
+  scale_color_manual(values = c("#f72585", "#52b788", "#fe7f2d", "#415a77")) +
+  guides(col=guide_legend("Reported year")) +
+  my_theme_general
+```
+
+
+Four lines in figure 7 with distinguished colors depict the trend in the four most recent years to investigate more detail. Notably, the incidents surged in June in 2017 and 2018 or November 2019 or October 2020 each year. However, we do not detect any similar pattern among these years.         
+
+
+## Male, female, children
+
+This section brings a closer look at male, female, and children, migrants. First, we compute the percentage of male, female and children cases over the `total_dead_and_missing`
+
+```{r table-overview, echo = TRUE}
+# Create a function to calculate sum and percentage of male, female & children
+function_gender_children <- function(data) {
+  data %>% 
+    summarise(sum_men = sum(number_of_males, na.rm = TRUE), 
+              sum_women = sum(number_of_females, na.rm = TRUE),
+              sum_children = sum(number_of_children, na.rm = TRUE),
+              sum_total_dead_and_missing = sum(total_dead_and_missing, na.rm = TRUE),
+               ) %>%  
+    mutate(perc_known_male = round(100 * (sum_men / sum_total_dead_and_missing), 1), 
+           perc_known_female = round(100 * (sum_women / sum_total_dead_and_missing), 1),
+           perc_known_children = round(100 * (sum_children / sum_total_dead_and_missing),1))
+}
+
+# Overview on percentage of known male, female & children on the total dead & missing
+d_perc_known_male_female_children <- df %>%  
+  function_gender_children()
+
+# Transpose table to print
+d_transpose <- d_perc_known_male_female_children %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  rename(" " = V1)
+d_transpose
+```
+
+
+The result above reveals the total number of men, women, and children and their percentage over the total number of dead and missing. Importantly, the percentage only presents the documented data. In other words, these three percentages do not sum up to 100% due to a lot of unidentified values. For instance, out of 42,496 migrant fatalities, only 22% male, 8% female, and 5.7% children were known and reported. The rest 64% is unknown.
+
+
+```{r stack-bar-region, echo = FALSE, fig.cap = '**Figure 8: Male, female, children incidents by region**', fig.height = 5}
+# Percentage male, female, children by region
+d_male_female_children_perc_region <- df %>%  
+  select(region, number_of_children, number_of_males, number_of_females) %>% 
+  group_by(region) %>%  
+  summarise(total_children = sum(number_of_children, na.rm = TRUE), 
+            total_males = sum(number_of_males, na.rm = TRUE), 
+            total_females = sum(number_of_females, na.rm = TRUE)) %>%
+  ## pivot long 
+  pivot_longer(cols = c(total_children, total_males, total_females)) %>%
+  ## calculate the percentage per region -> important
+  group_by(region) %>%  
+  mutate(perc = 100 * (value / sum(value))) %>% 
+  ungroup()
+
+## Stack bar chart male, female, children by region
+d_male_female_children_perc_region %>%  
+  ## exclude Central Asia due to no data
+  filter(region != "Central Asia") %>%  
+  ggplot(aes(x = region, y=perc, fill = name)) + 
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  geom_col(color = "white") + 
+  geom_text(aes(label = ifelse(round(perc) < 3, "", paste0(round(perc), "%"))), 
+            position = position_stack(vjust = 0.5), size = 3, color = "white") + 
+  scale_fill_manual(values = c("#06d6a0","#f72585", "#355070")) +
+  coord_flip() +
+  labs(#title = "Male, female, children incidents by region", 
+       y = "Nomalised percentage of dead and missing",
+       x = "Region") + 
+  my_theme_bar_chart + 
+  theme(legend.title = element_blank())
+```
+
+The stack bar chart normalizes the percentage in each region to 100 percent. The goal of this plot is to compare the proportion of gender and children within incident locations. As can be seen, the three longest blue bars on the US-Mexico border, East Asia, and Europe indicate the highest ratio of male deaths and disappearances. In contrast, Northern Africa did not record any men but children and women. Meanwhile, Southeast Asia has quite a high ratio of children compared to other areas.
+
+
+```{r dodge-bar-year, echo = FALSE, fig.cap = '**Figure 9: Comparison men, women and children incidents by year**', fig.height = 5}
+# number of male, female, children by year
+d_known_male_female_children_by_year <- df %>% 
+  group_by(reported_year) %>% 
+  function_gender_children() %>% 
+  select(reported_year, sum_men, sum_women, sum_children) %>% 
+  filter(reported_year!= 2021) %>% 
+  ## important to pivot long here
+  pivot_longer(cols = c(sum_men, sum_women, sum_children))
+
+## dodge bar chart comparison male, female, children by year
+d_known_male_female_children_by_year %>%  
+  mutate(name = fct_relevel(name, c("sum_men, sum_women, sum_children"))) %>% 
+ggplot(aes(reported_year, value)) +   
+  geom_bar(aes(fill = name), width = 0.6,
+           position = position_dodge(0.6), stat="identity") +
+  scale_fill_manual(values = c("#06d6a0", "#355070", "#f72585")) +
+  labs(#title = "Comparison men, women and children incidents by year",
+       x = "Year", y = "Total dead and missing") +
+  scale_x_continuous(breaks = seq(2014, 2020, 1),
+                     labels = seq(2014, 2020, 1)) +
+  my_theme_general + 
+  theme(legend.title = element_blank(),
+        panel.grid.major.x = element_blank(), 
+        panel.grid.minor.x = element_blank())
+```
+
+Figure 9 exhibits the trend over the years and the differences among the number of male, female, and children occurrences.  Male migrants who perished or went missing rose conspicuously from 2014 to 2018. Similarly, the number of female incidents tended to increase until 2019. Still, the number of men was significantly higher than women and children.  
+
+
+## Causes of death
+
+Having checked the distribution of incidents throughout the location, we now find the most common causes of deaths. First, we would like to check the unique values in this column.
+
+```{r unique-values-cause, include = TRUE}
+# Investigate on the cause of death column
+unique(df[c("cause_of_death")])
+length(unique(df$cause_of_death))
+
+# View the cause of death in a descending order
+d_cause_before_encode <- df %>% 
+  count(cause_of_death, sort = TRUE) 
+```
+
+The causes of death were not entered in a standardized manner in the dataset; thus, there are 426 unique causes of death. To glance at these causes, we generate the first word cloud by grouping and exhibiting their frequency through the whole sentence in the cell. This word cloud chooses random values and shuffles every time the code runs. By doing so, the readers are able to grab a general impression for this variable. 
+
+```{r word-cloud-sentence, echo = FALSE, fig.cap = '**Figure 10: Frequency through the whole sentence **', fig.height = 5}
+## Wordcloud using wordcloud2 to show the sentences 
+wordcloud2(data = d_cause_before_encode, size = 4)
+```
+
+The second word cloud below, has a slightly different meaning from the first one. Here, the sentences are broken into words, and the larger the word appears, the more frequent it's mentioned within this variable. Hence, only keywords are shown. 
+
+```{r word-cloud-keywords, echo = FALSE, fig.cap = '**Figure 11: Keywords of Cause of death **', fig.height = 5}
+## Wordcloud using wordcloud to show keywords
+wordcloud(words = df$cause_of_death, max.words = 300, 
+          random.order = FALSE, colors = brewer.pal(8, "Dark2"),
+          rot.per=0.35)
+```
+
+As the causes contain varied reasons, we would like to concentrate them more systematically by grouping similar causes from 426 unique values to 18 groups as below. 
+
+```{r encode-cause, include = TRUE}
+# Encode the variable cause of death from 426 unique values to 18 groups
+df <- df %>% 
+  mutate(cause_encoded =
+           case_when(
+             str_detect(cause_of_death, "Sexual|sexual|Rape|rape") ~ "Sexual abuse",
+             str_detect(cause_of_death, "Sickness|sickness|diabetic|heart attack|
+             meningitis|virus|cancer|bleeding|insuline|inhalation|Organ|Coronary|
+             Envenomation|Post-partum|Respiratory|Hypoglycemia|Exhaustion|
+             Heat stroke") ~ "Health condition",
+             str_detect(cause_of_death, "harsh weather|Harsh weather|Harsh conditions|
+                        harsh conditions") ~ "Harsh conditions",
+             str_detect(cause_of_death, "Unknown|unknown") ~ "Unknown",
+             str_detect(cause_of_death, "Starvation|starvation|
+                        Malnutrition|malnutrition") ~ "Starvation",
+             str_detect(cause_of_death, "dehydration|Dehydration") ~ "Dehydration",
+             str_detect(cause_of_death, "Drowning|drowning|Pulmonary|respiratory|
+                        lung|bronchial|pneumonia|Pneumonia") ~ "Drowning",
+             str_detect(cause_of_death, "hyperthermia|Hyperthermia") ~ "Hyperthermia",
+             str_detect(cause_of_death, "hypothermia|Hypothermia") ~ "Hypothermia",
+             str_detect(cause_of_death, "asphyxiation|suffocation") ~ "Suffocation",
+             str_detect(cause_of_death, "train|bus|vehicle|truck|boat|car|road|
+             van|plane|collision|Train|Bus|Vehicle|Truck|Boat|Car|Road|Van|Plane|
+             Collision") ~ "Vehicle",
+             str_detect(cause_of_death, "murder|stab|shot|violent|blunt force|
+             violence|beat-up|fight|murdered|death|Murder|Stab|Shot|Violent|
+             Blunt force| Violence|Beat-up|Fight|Murdered|Death|Hanging|Apache|
+             mortar|landmine|Gassed") ~ "Murder",
+             str_detect(cause_of_death, "crushed to death|crush|Crush|
+                        Rockslide") ~ "Crushed",
+             str_detect(cause_of_death, "burn|burns|burned|fire|Burn|Burns|
+                        Burned|Fire") ~ "Burned",
+             str_detect(cause_of_death, "electrocution|Electrocution") 
+             ~ "Electrocution",
+             str_detect(cause_of_death, "Fall|fall") ~ "Fallen",
+             str_detect(cause_of_death, "crocodile|hippopotamus|hippoptamus") 
+             ~ "Killed by animals",
+             str_detect(cause_of_death, "exposure|Exposure") ~ "Exposure",
+             TRUE ~ "Unknown"
+           ))
+```
+
+The bar chart in figure 12 shows the varying causes of death that have been encoded based on similarity in relation to the count of these causes appears.  The most common causes are drowning, fall from a boat, injuries from the boat etc., which constitute the category Drowning. The second common causes of death are included in an aggregated term: sickness and lack of medicine, digestive bleeding, Cervical cancer, Pneumonia, etc. are connected to health conditions. The third vehicle group is gathered for the following reasons: train, bus, plane accidents.
+
+```{r bar-chart-encoded-cause, echo = FALSE, fig.cap = '**Figure 12: Cause of death **', fig.height = 5}
+# Check how many times each cause_encoded appears 
+d_cause_encoded <- df %>% 
+  count(cause_encoded, sort = TRUE) 
+
+# Check total dead & missing by each cause_encoded
+d_dead_missing_cause_encoded <- df %>% 
+  count(cause_encoded, wt = total_dead_and_missing)
+
+# Bar chart of count of encoded cause of death
+ggplot(d_cause_encoded, 
+       aes(x = reorder(cause_encoded, n), y = n)) +
+  geom_col(fill = "#415a77") +
+  geom_text(aes(label = n), size = 3, hjust = -0.5, vjust = 1) +
+  labs(x = "Encoded cause of dead", y = "Count") +
+  scale_y_continuous(limits = c(0, 2500)) +
+  coord_flip() +
+  my_theme_bar_chart
+```
+
+
+```{r jitter-plot-incident-cause, echo = FALSE, fig.cap = '**Figure 13: Distribution of incidents by cause of death**', fig.height = 5}
+# Jitter plot total dead & missing by cause of death
+ggplot(df, aes(x = cause_encoded, y = total_dead_and_missing)) +
+  geom_jitter(alpha = 0.25, width = 0.2, color = "#b7094c") +
+  labs(#title = "Distribution of incidents by cause of death",
+       x = "Encoded cause of death", y = "Total dead and missing") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+The jitter plot shows us the number of fatalities for varied reasons but with a vision of data points. From this graph, the death of over 1000 migrants was caused by drowning, and starvation accounted for over 750 cases.
+
+
+```{r heat-map-incident-cause-region, echo = FALSE, fig.cap = '**Figure 14: Total incidents by causes of deaths and regions**', fig.height = 5}
+# Heat map total dead & missing, cause of death, region
+ggplot(df, aes(x = region, y = cause_encoded, fill = total_dead_and_missing)) +
+  geom_tile(color = "white", lwd = 1, linetype = 1) +
+  # scale_fill_continuous(breaks = c(0, 800)) +
+  coord_equal() + 
+  scale_fill_gradientn(
+    breaks = seq(0, 800, 100),
+    name = "Total dead and missing",
+    colours = c("#1b4965", "#1780a1", "#2e6f95", "#455e89", 
+                "#723c70", "#892b64", "#a01a58", "#b7094c"),
+    values = scales::rescale(seq(0, 800, 100))) +
+  labs(#title = "Total incidents by causes of deaths and regions", 
+       y = "Encoded cause of dead", x = "Region") +
+  my_theme_heat_map
+```
+
+The heat map exhibits the colors corresponding to the total of incidents, regions on the x-axis, and encoded causes on the y-axis. Through this plot, there are no clear-cut differences among one region coordinating to one reason. Nevertheless, a red square in Southeast Asia with more than 750 cases due to starvation. 
+
+To better comprehend the typical causes in each region, we would like to introduce the combined graphs for the top six areas with the highest number of incidents. At first, we wrote one code to plot the top 6 frequent reasons for the top 6 regions with facet_wrap( ~ region). However, each region has different leading causes of death. Therefore, we could only write codes to plot one by one then combine six of them together. 
+
+```{r 1st-try-top6-region-cause, include = FALSE}
+# Create a 6-in-1 plot for top 6 regions and top 6 causes
+# Top 6 regions with the highest total dead & missing
+d_top_region <- df %>% 
+  select(region, total_dead_and_missing) %>% 
+  group_by(region) %>% 
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  top_n(6)
+
+# Get the 6 overall most frequent cause of dead/missins
+d_top_deadliest_causes <- df %>% 
+  filter(cause_encoded != "Unknown") %>% 
+  group_by(cause_encoded) %>%  
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  arrange(-total) %>% 
+  top_n(6)
+
+## first plot -> not good because different causes for each region
+df %>%  
+  filter(cause_encoded %in% d_top_deadliest_causes$cause_encoded, 
+         region %in% d_top_region$region) %>% 
+  group_by(region, cause_encoded) %>% 
+  summarise(total_dead_missing = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  ungroup() %>%  
+    ggplot(aes(x = cause_encoded, y = total_dead_missing)) +
+  geom_col() +
+  facet_wrap(~ region) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+## second try without top 6 reasons -> not good because different causes for each region   
+df %>%  
+  filter(region %in% d_top_region$region) %>% 
+  group_by(region, cause_encoded) %>% 
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>% 
+  ungroup() %>%  
+    ggplot(aes(x = cause_encoded, y = total)) +
+  geom_col() +
+  facet_wrap(~ region) +
+  coord_flip()
+
+## Not showing this chunk because each region has different causes
+```
+
+
+```{r 2nd-try-top6-region-cause, fig.cap = '**Figure 15: Top 5 causes in each region**', fig.height = 5, echo=FALSE}
+#### Each region has their different top reasons, we have to plot each region
+# Mediterranean top 5 cause of death
+plot1 <- df %>%
+  filter(region %in% "Mediterranean") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha=.6, width=.4) +
+  ylab("Total dead and missing") +
+  xlab("Mediterranean") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# North Africa top 5 cause of death
+plot2 <- df %>%
+  filter(region %in% "North Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot(aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha=.6, width=.4) +
+  ylab("Total dead and missing") +
+  xlab("North Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# US-Mexico Border top 5 cause of death
+plot3 <- df %>%
+  filter(region %in% "US-Mexico Border") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = .6, width = .4) +
+  ylab("Total dead and missing") +
+  xlab("US-Mexico Border") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Sub-Saharan Africa top 5 cause of death
+plot4 <- df %>%
+  filter(region %in% "Sub-Saharan Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = .6, width = .4) +
+  ylab("Total dead and missing") +
+  xlab("Sub-Saharan Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Southeast Asia top 5 cause of death
+plot5 <- df %>%
+  filter(region %in% "Southeast Asia") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = 0.6, width=.4) +
+  ylab("Total dead and missing") +
+  xlab("Southeast Asia") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+# Horn of Africa top 5 cause of death
+plot6 <- df %>%
+  filter(region %in% "Horn of Africa") %>%
+  group_by(cause_encoded) %>%
+  summarise(total = sum(total_dead_and_missing, na.rm = TRUE)) %>%
+  top_n(n = 5) %>%
+  arrange(desc(total)) %>% 
+  ggplot( aes(x = reorder(cause_encoded, total), y = total) ) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = .6, width = .4) +
+  ylab("Total dead and missing") +
+  xlab("Horn of Africa") +
+  coord_flip() + 
+  my_theme_bar_chart
+
+grid.arrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol = 2, nrow = 3)
+```
+
+As can be seen from these bar charts, drowning is the most prevailing root cause in many areas. Unlike the top 5 regions, most migrants in North Africa decreased as a result of health conditions. Meanwhile, the US-Mexico Border addressed Unknown reasons for most of the cases. Remarkably, starvation is the second most common reason for deaths in Southeast Asia. Furthermore, vehicles appear as one of the top reasons in many regions like North Africa, the US-Mexico border, Sub-Saharan Africa, and the Horn of Africa.
+
+
+## Survivors
+
+The number of survivors in the Central Mediterranean was the highest (40,524) in almost all the migration routes. As a high-traffic area of migration, Central Mediterranean experienced both the top of incidents and survivors. There was a difference of over 85% between the figures for this area, compared within the remaining regions. 
+
+```{r survivors, echo = FALSE, fig.cap = '**Figure 16: Number of survivor by region**', fig.height = 5}
+# Create a new variable: sum of death, missing & survivors 
+df <- df %>% 
+  mutate(total_dead_missing_survivor = 
+           ifelse(is.na(total_dead_and_missing), 
+                  0, 
+                  total_dead_and_missing) + 
+           ifelse(is.na(number_of_survivors), 
+                  0, 
+                  number_of_survivors))
+
+# Percentage of known survivors on the total death, missing & survivors
+# df %>%
+#   summarise(perc_survivor = round(100 * (number_of_survivors /
+#                                            total_dead_missing_survivor), 1))
+
+# Ranking on the number of survivors by region
+d_survivor_region <- df %>% 
+  count(region, wt = number_of_survivors, sort = TRUE) 
+
+## Lolipop chart survivor by region
+ggplot(d_survivor_region, aes(x = reorder(region, n), y = n)) +
+  geom_segment(aes(x = reorder(region, n), xend = reorder(region, n), 
+                   y = 0, yend = n), size = 1, color = "skyblue") + 
+  geom_point( color="blue", size = 4, alpha = 0.6) +
+  geom_text(aes(label = n, y = n + 500), size = 3, hjust = 0) +
+  labs(#title = "Number of survivor by region", 
+       x = "Region", y = "Number of survivor") +
+  coord_flip() +
+  scale_y_continuous(limits = c(0, 50000)) +
+  my_theme_bar_chart
+```
+
+
+However, it is essential to point out that, number of survivors is "the number of migrants that survived the incident, if known. The age, gender, and country of origin of survivors are recorded in the 'Comments' variable if known. If unknown, it is left blank" (according to IOM's definition). Therefore, the number of survivors in Italy to France, for instance, does not mean that there is no chance of survival in this place, but there might be just unrecorded information. 
+
+
+## Source quality
+
+Under this section, we will discuss about the source quality of each region where incidents took place. 
+
+The cases were registered on a scale from 1-5 based on the source of information available according to [the IOM]("https://missingmigrants.iom.int/methodology"). Incidents ranked as level 1 are based on only one media source; level 2 is based on information from uncorroborated eyewitness accounts or data from survey respondents. Incidents ranked as level 3 are based on information from multiple media reports, while level 4 incidents are based on information from at least one NGO, IGO, or humanitarian actor with direct knowledge of the incident. Incidents ranked at level 5 are based on official sources such as coroners, medical examiners, or government officials OR from multiple humanitarian actors. 
+
+
+```{r source-quality, echo = FALSE, fig.cap = '**Figure 17: Source quality by region**', fig.height = 5}
+# Calculate source proportion in each region
+df %>% 
+  group_by(region, source_quality) %>% 
+  ## filter the regions with too few data points
+  filter(!(region %in% c("Northern Africa", "East Asia", "Central Asia",
+                         "North America", "Eastern Africa"))) %>%
+  count(source_quality) %>%
+  group_by(region) %>% 
+  mutate(perc = 100 * (n / sum(n))) %>% 
+  ungroup() %>%
+  ## Stack bar chart
+  ggplot(aes(x = region, y = perc, fill = as.factor(source_quality))) + 
+  scale_y_continuous(labels = percent_format(scale = 1)) +
+  geom_col(color = "white") + 
+  geom_text(aes(label = ifelse(round(perc) <3, "", paste0(round(perc), "%"))),
+            position = position_stack(vjust = 0.5), 
+            size = 3, color = "white") +
+  scale_fill_manual(values = c("#c3e7ff","#96bed9", 
+                               "#6a96b3", "#3e708f", "#004c6d")) +
+  coord_flip() +
+  labs(#title = "Source quality by region", 
+       y = "Nomalised percentage of source quality",
+       x = "Region") + 
+  guides(fill=guide_legend(title="Source quality")) +
+  my_theme_bar_chart
+```
+
+The stack bar chart demonstrates the ratio of data sources in one region. 66% of data in the US-Mexico border come from the highest source quality. Other areas have a relatively low proportion of source quality 5. Notably, the Mediterranean and Middle East's data was recorded from source quality 4. Conversely, data was collected from source quality 1 in Central America and South America. 
+
+# Model
+
+We would like to estimate the amount of total dead and missing migrants based on the given location: longitude and latitude. We will use a Trend surface analysis.  
+
+**What is a Trend surface analysis?** 
+
+Trend surface analysis is a mathematical technique used in environmental sciences (archaeology, geology, soil science, etc.). It is based on low-order polynomials of spatial coordinates for estimating a regular grid of points from scattered observations. For more details, please refer to: <https://en.wikipedia.org/wiki/Trend_surface_analysis>
+
+
+**The modeling approach** 
+
+Firstly, we attempt to fit a trend surface by least-squares with `lon` as x-, `lat` as y-, and `total_dead_and_missing` migrants as z-variable. We then evaluate the trend surface over a grid with the `surf.ls` function from the `spatial` R package and check the quality of the regression with the `trls.influence` function. Orange points in the figure below mark the points with the largest discrepancy between the observations and predictions by the model. 
+
+
+```{r model, include = TRUE, fig.cap = '**Figure 18: Trend Surface model**', fig.height = 5}
+# Create dataframe for the model
+df_red <- df[c("total_dead_and_missing","lat","lon")]
+df_red <- as.data.frame(sapply(df_red, as.numeric))
+colnames(df_red) <- c("z", "y", "x")
+df_red <- df_red[c("x", "y", "z")]
+
+library(MASS)
+library(spatial)
+
+# Fit a trend Surface by Least-squares
+df_red <- df_red %>%  
+  filter(!is.na(z))
+surf <- surf.ls(6, df_red)
+
+# Evaluate trend surface over a grid
+trsurf <- trmat(surf, min(df_red$x), max(df_red$x),
+                min(df_red$y), max(df_red$y), 50)
+
+# Regression diagnostics for trend surfaces
+infl_surf <- trls.influence(surf)
+cand <- as.data.frame(infl_surf)[abs(infl_surf$stresid) > 1.5,]
+cand_xy <- df_red[as.integer(rownames(cand)), c("x", "y")]
+
+eqscplot(trsurf, type = "n")
+contour(trsurf, add = TRUE, col = "grey")
+plot(surf, add = TRUE, div = 100)
+points(cand_xy, pch = 16, col = "orange")
+title(main = "Surface mapping")
+```
+
+# Chapter of choice  
+
+**Data Displaying**
+
+To achieve the data visualization and presentation, numerous packages were applied in this report such as wordcloud, ggridges, ggpol, mapdata, kableExtra and many more. 
+
+**Code checking**
+
+Additionally, we finally use the package lintr to check our code for the Wickham style guide. The goal is not only write codes but also to write them in a good manner that helps other to read and understand easily.
+
+```{r check-code, eval = FALSE}
+# check code in Wickham style
+lint(
+  "Final_Report_Missing_Migrant_Project.Rmd",
+  linters =
+    lintr::with_defaults(
+      commented_code_linter = NULL,
+      trailing_whitespace_linter = NULL
+    )
+)
+```
+
+# Limitation
+
+- IOM's Missing Migrants Project (MMP) considers migrants only at the external borders of a country or during the process of migrating towards a landing place in all parts of the world. Gathering data on migrant deaths and disappearances stays difficult because of insufficient standardized reporting, unknown incidents, and possible hidden information from some areas; hence, data are usually lacking. Thus, this dataset has many missing values in various features.
+
+- The reasons for death are not consistent when inserting data; significantly, the values vary too much and are not grouped. With 426 unique values, we tried our best to classify the categories for these causes, yet some cases were hard to decide on which group they belonged to.
+
+- The data on the disappearances are primarily unavailable due to the challenges in investigating such cases, particularly in a cross-border context.
+
+- The Trend surface model did not provide completely satisfactory results. Unfortunately, there are still locations where the model cannot predict precisely.
+
+    
+# Conclusion
+
+The project's purpose is to gain an insightful understanding of the dataset and the current situation of asylum-seekers and migrants' incidents in the world. Moreover, exploring, analyzing data, learning to code are also very important. To accomplish the task, we proactively selected a dataset, created a meaningful report, displayed the results based on informative visualizations, and created a prediction model.
+
+Several major migrant deaths and disappearances were found predominantly in the Mediterranean, North Africa, and US-Mexico border. 2018 peaked with the highest number of documented fatalities, then diminished in 2019 and 2020. The causes of death vary according to the location but drowning, health condition, vehicle, and unknown are the most common reasons. Besides, in spite of much unavailable data, our investigation indicates that the number of male and female incidents increased over the year, except from 2020. Over the years, the ratio of total known cases for men has always been higher than for women and children, but it can differ with regions. For the migration route, the Central Mediterranean is the top for the number of survivors. In addition, the source quality spreads differently towards different regions. 
+
+To sum up, the MMP data or other fatalities migration data would be more accurate if the authorities and governments in all countries worked together and promptly update any found case in an open data source. Furthermore, the IOM could make the cause of deaths more systematically based on predefined cause categories. The detail of causes can be noted in another separate variable. Even though refugees and migrants are complex with numerous political points of view, comprehending the situation through data helps policymakers, organizations, and NGOs make the best decisions, improve the circumstances and prevent fatal occurrences. 
+
+
+
