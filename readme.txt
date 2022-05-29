@@ -7,11 +7,9 @@ GENERAL INFORMATION
 	2. Author information 
     	A. Principal Investigator Contact Information 
 	Name: Quyen Duong  
-	Email: quyen.duong@stud.hslu.ch 
 	
     	B. Associate or Co-investigator Contact Information 
 	Name: Nhu Casati Nguyen
-	Email: quynhnhu.nguyenvu@stud.hslu.ch 
 
 	3. Date of data download: 05-09-2021 
 
